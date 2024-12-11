@@ -1,0 +1,894 @@
+﻿# <FILE_DELIMITER> #
+controller.lua
+
+-- Initialize socket library
+local socket = require("socket")
+
+-- Create UDP socket and bind it
+local server = socket.udp()
+server:setsockname("127.0.0.1", 65432)
+server:settimeout(0)  -- Non-blocking
+console.log("Server started on 127.0.0.1:65432")
+
+-- Button mapping
+local buttons = {
+    up = "Up",
+    down = "Down",
+    left = "Left",
+    right = "Right",
+    a = "A",
+    b = "B",
+    start = "Start",
+    select = "Select"
+}
+
+-- Send ready signal to Python
+udp:sendto("ready", "localhost", port)
+
+-- Main loop
+while true do
+    -- Handle incoming commands
+    local data = udp:receive()
+    if data then
+        local cmd = data:match("^(%S+)")
+        
+        if cmd == "press" then
+            -- Handle button press
+            local button, duration = data:match("press (%S+) (%S+)")
+            if button and buttons[button] then
+                -- Create joypad table
+                local controls = {}
+                for b in pairs(buttons) do
+                    controls[buttons[b]] = (b == button)
+                end
+                
+                -- Press button for duration
+                local frames = math.floor(duration * 60)  -- Convert seconds to frames
+                for i=1,frames do
+                    joypad.set(controls, 1)
+                    emu.frameadvance()
+                end
+                
+                -- Release button
+                for b in pairs(buttons) do
+                    controls[buttons[b]] = false
+                end
+                joypad.set(controls, 1)
+                
+                udp:sendto("ok", "localhost", port)
+            end
+            
+        elseif cmd == "screen" then
+            -- Capture and send screen content
+            local pixels = client.screenshottoclipboard()
+            udp:sendto(pixels, "localhost", port)
+            
+        elseif cmd == "loadstate" then
+            -- Load save state
+            local path = data:match("loadstate (.+)")
+            if path then
+                savestate.load(path)
+                udp:sendto("ok", "localhost", port)
+            else
+                udp:sendto("error: invalid path", "localhost", port)
+            end
+            
+        elseif cmd == "exit" then
+            break
+        end
+    end
+    
+    -- Advance emulation
+    emu.frameadvance()
+end
+
+-- Cleanup
+udp:close()
+# <FILE_DELIMITER> #
+environment.yml
+
+name: pokemon-rl
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
+  - pip
+  - pip:
+    - opencv-python
+    - numpy
+    - pillow
+    - transformers
+    - ultralytics  # YOLOv8
+    - open_clip_torch
+    - mss  # Screen capture
+    - pywin32  # Windows window capture
+    - pyautogui  # Emulator control
+    - jupyter
+    - ipykernel
+    - matplotlib
+    - tensorboard
+# <FILE_DELIMITER> #
+export_config.json
+
+{
+    "delimiter": "# <FILE_DELIMITER> #",
+    "exclude_dirs": [
+        "BizHawk",
+        "logs",
+        "pokemon_rl.egg-info"
+    ],
+    "exclude_files": [
+        ".env.template",
+        "export_script.py",
+        "project_files.txt",
+        "Pokemon - Fire Red Version (U) (V1.1).gba",
+        "visualboyadvance-m.exe"
+    ],
+    "exclude_patterns": [
+        "*/__pycache__/*",
+        "*.pyc",
+        "*.pyo",
+        "*.pyd",
+        ".git/*",
+        ".env",
+        ".env.template",
+        "*.exe",
+        "*.gba",
+        "logs/*",
+        "*.egg-info/*",
+        ".pytest_cache/*",
+        ".coverage",
+        "__pycache__",
+        "*.log",
+        "export_script.py",
+        "project_files.txt"
+    ],
+    "output_file": "project_files.txt"
+}
+# <FILE_DELIMITER> #
+readme.md
+
+# Pokemon FireRed RL Agent
+
+A reinforcement learning agent that learns to play Pokemon FireRed using computer vision and deep learning.
+
+## Setup
+
+1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) if you haven't already.
+
+2. Clone this repository:
+```bash
+git clone https://github.com/yourusername/pokemon-firered-rl.git
+cd pokemon-firered-rl
+```
+
+3. Create and activate the conda environment:
+```bash
+conda env create -f environment.yml
+conda activate pokemon-rl
+```
+
+4. Install the environment in Jupyter:
+```bash
+python -m ipykernel install --user --name pokemon-rl --display-name "Python (Pokemon-RL)"
+```
+
+## GPU Support
+
+This project uses PyTorch with CUDA support. If you don't have a GPU, edit `environment.yml` and replace the PyTorch dependencies with:
+
+```yaml
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
+```
+
+## Project Structure
+
+- `environment.yml` - Conda environment configuration
+- `src/` - Source code directory
+  - `env/` - Pokemon game environment
+  - `models/` - YOLO and CLIP models
+  - `agents/` - RL agent implementation
+  - `utils/` - Utility functions
+
+## Requirements
+
+- Python 3.10
+- CUDA-capable GPU (recommended)
+- VisualBoyAdvance-M emulator
+- Pokemon FireRed ROM (not included)
+# <FILE_DELIMITER> #
+setup.py
+
+from setuptools import setup, find_packages
+
+setup(
+    name="pokemon_rl",
+    version="0.1",
+    packages=find_packages(where="src"),  # Look for packages in src directory
+    package_dir={"": "src"},  # Tell setuptools packages are under src
+    install_requires=[
+        'numpy',
+        'opencv-python',
+        'pillow',
+        'python-dotenv',
+        'mss',
+        'pywin32',
+        'torch',
+        'torchvision',
+        'transformers',
+        'ultralytics',
+        'open_clip_torch',
+        'pyautogui',
+    ],
+    python_requires='>=3.10',
+)
+# <FILE_DELIMITER> #
+test_enviroment.py
+
+#!/usr/bin/env python3
+"""Test script to verify environment setup."""
+
+def test_imports():
+    """Test all required package imports."""
+    packages = {
+        'PyTorch': 'torch',
+        'OpenCV': 'cv2',
+        'NumPy': 'numpy',
+        'PIL': 'PIL',
+        'Transformers': 'transformers',
+        'Ultralytics': 'ultralytics',
+        'CLIP': 'open_clip',
+        'MSS': 'mss',
+        'PyWin32': 'win32gui',
+        'PyAutoGUI': 'pyautogui',
+        'Matplotlib': 'matplotlib'
+    }
+    
+    failed = []
+    for name, package in packages.items():
+        try:
+            __import__(package)
+            print(f"✓ {name} successfully imported")
+        except ImportError as e:
+            failed.append(name)
+            print(f"✗ {name} import failed: {str(e)}")
+    
+    return failed
+
+def test_cuda():
+    """Test CUDA availability."""
+    import torch
+    cuda_available = torch.cuda.is_available()
+    print(f"\nCUDA Available: {'✓' if cuda_available else '✗'}")
+    if cuda_available:
+        print(f"CUDA Device: {torch.cuda.get_device_name(0)}")
+    return cuda_available
+
+def main():
+    print("Testing environment setup...\n")
+    
+    # Test imports
+    failed_imports = test_imports()
+    
+    # Test CUDA
+    cuda_available = test_cuda()
+    
+    # Print summary
+    print("\nEnvironment Test Summary:")
+    print("------------------------")
+    if not failed_imports:
+        print("✓ All required packages installed")
+    else:
+        print(f"✗ Missing packages: {', '.join(failed_imports)}")
+    
+    print(f"CUDA Status: {'✓ Available' if cuda_available else '✗ Not Available'}")
+    
+if __name__ == "__main__":
+    main()
+# <FILE_DELIMITER> #
+src\__init__.py
+
+
+# <FILE_DELIMITER> #
+src\core\emulator.py
+
+from typing import Optional, Union
+import subprocess
+import time
+import socket
+import json
+import logging
+from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+class EmulatorError(Exception):
+    """Base exception for emulator-related errors"""
+    pass
+
+class BizHawkEmulator:
+    """Controls BizHawk emulator for Pokemon FireRed"""
+    
+    def __init__(
+        self,
+        bizhawk_path: Union[str, Path],
+        rom_path: Union[str, Path],
+        lua_path: Union[str, Path],
+        save_state: Optional[Union[str, Path]] = None
+    ):
+        """
+        Initialize BizHawk emulator controller
+        
+        Args:
+            bizhawk_path: Path to BizHawk executable (EmuHawk.exe)
+            rom_path: Path to Pokemon FireRed ROM
+            lua_path: Path to Lua control script
+            save_state: Optional path to savestate file
+        """
+        self.bizhawk_path = Path(bizhawk_path)
+        self.rom_path = Path(rom_path)
+        self.lua_path = Path(lua_path)
+        self.save_state = Path(save_state) if save_state else None
+        self.process = None
+        
+        # Set up socket configuration
+        self.port = 65432  # Fixed port for BizHawk to bind to
+        self.host = '127.0.0.1'
+        
+        # Create UDP socket for client
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        logger.info(f"Socket initialized with port {self.port}")
+
+
+        # Validate paths and initialize
+        self._validate_paths()
+        self._start_emulator()
+        
+    def _validate_paths(self) -> None:
+        """Validate all required paths exist"""
+        if not self.bizhawk_path.exists():
+            raise FileNotFoundError(f"BizHawk executable not found at {self.bizhawk_path}")
+        if not self.rom_path.exists():
+            raise FileNotFoundError(f"ROM file not found at {self.rom_path}")
+        if not self.lua_path.exists():
+            raise FileNotFoundError(f"Lua script not found at {self.lua_path}")
+        if self.save_state and not self.save_state.exists():
+            raise FileNotFoundError(f"Save state file not found at {self.save_state}")
+    
+    def _start_emulator(self) -> None:
+        """Start BizHawk with the ROM and Lua script"""
+        try:
+            cmd = [
+                str(self.bizhawk_path),
+                str(self.rom_path),
+                "--lua=" + str(self.lua_path),
+                "--socket_ip=127.0.0.1",
+                "--socket_port=65432"  # Fixed port
+            ]
+            
+            logger.info("Starting BizHawk with command: %s", " ".join(cmd))
+            self.process = subprocess.Popen(cmd)
+            
+            # Wait for Lua script to connect
+            self.socket.settimeout(10.0)
+            try:
+                data, addr = self.socket.recvfrom(1024)
+                if data.decode() == "ready":
+                    logger.info("Lua script connected successfully")
+                    self.socket.settimeout(1.0)  # Reset to shorter timeout for normal operation
+            except socket.timeout:
+                raise EmulatorError("Timeout waiting for Lua script connection")
+            
+            # Load save state if provided
+            if self.save_state:
+                self.load_state(self.save_state)
+                
+        except Exception as e:
+            logger.error("Failed to start emulator: %s", str(e))
+            self.close()
+            raise
+    
+    def _send_command(self, command: str, wait_response: bool = True) -> Optional[str]:
+        """Send command to Lua script and optionally wait for response"""
+        try:
+            self.socket.sendto(command.encode(), ('localhost', self.port))
+            if wait_response:
+                data, _ = self.socket.recvfrom(1024)
+                return data.decode()
+        except socket.timeout:
+            logger.error("Timeout while sending command: %s", command)
+            raise EmulatorError("Communication timeout with Lua script")
+        except Exception as e:
+            logger.error("Failed to send command: %s", str(e))
+            raise EmulatorError("Failed to communicate with Lua script")
+    
+    def press_button(self, button: str, duration: float = 0.1) -> None:
+        """
+        Press a button for specified duration
+        
+        Args:
+            button: Button to press (up, down, left, right, a, b, start, select)
+            duration: How long to hold the button in seconds
+        """
+        try:
+            self._send_command(f"press {button} {duration}", wait_response=False)
+            time.sleep(duration + 0.05)  # Add small buffer for processing
+        except Exception as e:
+            logger.error("Failed to press button %s: %s", button, str(e))
+            raise
+    
+    def load_state(self, state_path: Union[str, Path]) -> None:
+        """Load a savestate file"""
+        try:
+            state_path = Path(state_path)
+            if not state_path.exists():
+                raise FileNotFoundError(f"Save state not found: {state_path}")
+            
+            response = self._send_command(f"loadstate {state_path}")
+            if response != "ok":
+                raise EmulatorError(f"Failed to load state: {response}")
+            
+            logger.info("Successfully loaded save state: %s", state_path)
+            
+        except Exception as e:
+            logger.error("Failed to load save state: %s", str(e))
+            raise
+    
+    def get_screen(self) -> bytes:
+        """Get current screen content as bytes"""
+        try:
+            response = self._send_command("screen")
+            return response.encode()  # You'll need to implement proper image handling
+        except Exception as e:
+            logger.error("Failed to get screen content: %s", str(e))
+            raise
+    
+    def close(self) -> None:
+        """Clean up resources and close emulator"""
+        try:
+            if self.socket:
+                try:
+                    self._send_command("exit", wait_response=False)
+                except:
+                    pass
+                self.socket.close()
+            
+            if self.process:
+                self.process.terminate()
+                self.process.wait(timeout=5.0)
+            
+            logger.info("Emulator closed successfully")
+            
+        except Exception as e:
+            logger.error("Error while closing emulator: %s", str(e))
+            raise
+        finally:
+            self.process = None
+            self.socket = None
+# <FILE_DELIMITER> #
+src\core\image_utils.py
+
+"""Utilities for processing emulator screen captures."""
+import numpy as np
+import cv2
+from PIL import Image
+import io
+import base64
+import logging
+from typing import Tuple, Optional
+
+logger = logging.getLogger(__name__)
+
+class ImageProcessor:
+    """Handles processing and analysis of game screen images."""
+    
+    GBA_RESOLUTION = (240, 160)  # Native GBA resolution
+    
+    @staticmethod
+    def decode_screenshot(screen_data: bytes) -> np.ndarray:
+        """Convert raw screenshot data to numpy array."""
+        try:
+            # BizHawk provides PNG data
+            image = Image.open(io.BytesIO(screen_data))
+            # Convert to RGB numpy array
+            return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            logger.error(f"Failed to decode screenshot: {e}")
+            raise
+    
+    @staticmethod
+    def normalize_size(image: np.ndarray) -> np.ndarray:
+        """Ensure image is at GBA resolution."""
+        if image.shape[:2] != ImageProcessor.GBA_RESOLUTION[::-1]:
+            return cv2.resize(image, ImageProcessor.GBA_RESOLUTION)
+        return image
+    
+    @staticmethod
+    def to_base64(image: np.ndarray) -> str:
+        """Convert image to base64 string."""
+        try:
+            success, buffer = cv2.imencode('.png', image)
+            if not success:
+                raise ValueError("Failed to encode image")
+            return base64.b64encode(buffer).decode('utf-8')
+        except Exception as e:
+            logger.error(f"Failed to convert image to base64: {e}")
+            raise
+            
+    @staticmethod
+    def save_screenshot(image: np.ndarray, path: str) -> None:
+        """Save screenshot to file."""
+        try:
+            cv2.imwrite(path, image)
+        except Exception as e:
+            logger.error(f"Failed to save screenshot: {e}")
+            raise
+            
+    @staticmethod
+    def get_pixel_color(image: np.ndarray, x: int, y: int) -> Tuple[int, int, int]:
+        """Get RGB color of pixel at (x,y)."""
+        try:
+            return tuple(image[y, x])  # OpenCV uses (y,x) indexing
+        except IndexError:
+            logger.error(f"Pixel coordinates ({x},{y}) out of bounds")
+            raise
+# <FILE_DELIMITER> #
+src\core\state_manager.py
+
+"""Manages game state tracking and transitions."""
+from enum import Enum, auto
+from typing import Optional, Dict, Any
+import logging
+import json
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+class GameState(Enum):
+    """Possible game states."""
+    UNKNOWN = auto()
+    TITLE_SCREEN = auto()
+    MAIN_MENU = auto()
+    OVERWORLD = auto()
+    BATTLE = auto()
+    DIALOG = auto()
+    MENU = auto()
+    INVENTORY = auto()
+
+class StateManager:
+    """Tracks and manages game state."""
+    
+    def __init__(self):
+        """Initialize state manager."""
+        self.current_state = GameState.UNKNOWN
+        self.previous_state = GameState.UNKNOWN
+        self.state_data: Dict[str, Any] = {}
+        
+    def update_state(self, new_state: GameState, **kwargs) -> None:
+        """
+        Update current game state and associated data.
+        
+        Args:
+            new_state: New game state
+            **kwargs: Additional state-specific data
+        """
+        self.previous_state = self.current_state
+        self.current_state = new_state
+        self.state_data.update(kwargs)
+        
+        logger.info(f"State transition: {self.previous_state.name} -> {self.current_state.name}")
+        
+    def get_state_data(self) -> Dict[str, Any]:
+        """Get current state data."""
+        return {
+            'current_state': self.current_state.name,
+            'previous_state': self.previous_state.name,
+            'data': self.state_data
+        }
+        
+    def save_state(self, path: Path) -> None:
+        """Save state data to file."""
+        try:
+            state_data = self.get_state_data()
+            with open(path, 'w') as f:
+                json.dump(state_data, f, indent=2)
+            logger.info(f"Saved state data to {path}")
+        except Exception as e:
+            logger.error(f"Failed to save state data: {e}")
+            raise
+            
+    def load_state(self, path: Path) -> None:
+        """Load state data from file."""
+        try:
+            with open(path, 'r') as f:
+                state_data = json.load(f)
+            
+            self.current_state = GameState[state_data['current_state']]
+            self.previous_state = GameState[state_data['previous_state']]
+            self.state_data = state_data['data']
+            
+            logger.info(f"Loaded state data from {path}")
+        except Exception as e:
+            logger.error(f"Failed to load state data: {e}")
+            raise
+            
+    def is_in_state(self, state: GameState) -> bool:
+        """Check if currently in specified state."""
+        return self.current_state == state
+        
+    def has_transitioned(self) -> bool:
+        """Check if state has changed since last update."""
+        return self.current_state != self.previous_state
+# <FILE_DELIMITER> #
+src\core\__init__.py
+
+
+# <FILE_DELIMITER> #
+src\env\game_env.py
+
+"""Pokemon FireRed environment for reinforcement learning."""
+from typing import Tuple, Dict, Any, Optional
+import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
+import logging
+from pathlib import Path
+
+from ..core.emulator import BizHawkEmulator
+from ..core.state_manager import StateManager, GameState
+from ..core.image_utils import ImageProcessor
+
+logger = logging.getLogger(__name__)
+
+class PokemonFireRedEnv(gym.Env):
+    """OpenAI Gym environment for Pokemon FireRed."""
+    
+    metadata = {'render_modes': ['rgb_array']}
+    
+    # Action space mapping
+    ACTIONS = {
+        0: 'up',
+        1: 'down',
+        2: 'left',
+        3: 'right',
+        4: 'a',
+        5: 'b',
+        6: 'start',
+        7: 'select'
+    }
+    
+    def __init__(
+        self,
+        bizhawk_path: Path,
+        rom_path: Path,
+        lua_path: Path,
+        save_state: Optional[Path] = None
+    ):
+        """
+        Initialize Pokemon FireRed environment.
+        
+        Args:
+            bizhawk_path: Path to BizHawk executable
+            rom_path: Path to Pokemon FireRed ROM
+            lua_path: Path to Lua control script
+            save_state: Optional path to starting save state
+        """
+        super().__init__()
+        
+        # Initialize components
+        self.emulator = BizHawkEmulator(bizhawk_path, rom_path, lua_path, save_state)
+        self.state_manager = StateManager()
+        self.image_processor = ImageProcessor()
+        
+        # Define action and observation spaces
+        self.action_space = spaces.Discrete(len(self.ACTIONS))
+        self.observation_space = spaces.Box(
+            low=0,
+            high=255,
+            shape=(160, 240, 3),  # GBA resolution, RGB
+            dtype=np.uint8
+        )
+        
+        # Environment state
+        self.current_screen = None
+        self.steps_taken = 0
+        self.max_steps = 1000  # Configurable
+        
+    def reset(self, *, seed=None, options=None) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Reset environment to initial state."""
+        super().reset(seed=seed)
+        
+        # Reset internal state
+        self.steps_taken = 0
+        self.state_manager = StateManager()
+        
+        # Get initial observation
+        self.current_screen = self._get_observation()
+        
+        return self.current_screen, {}
+        
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """
+        Take action in environment.
+        
+        Args:
+            action: Integer action from action space
+            
+        Returns:
+            observation: Game screen as numpy array
+            reward: Reward for action
+            terminated: Whether episode is done
+            truncated: Whether episode was truncated
+            info: Additional information
+        """
+        # Execute action
+        if action in self.ACTIONS:
+            self.emulator.press_button(self.ACTIONS[action])
+        
+        # Get new observation
+        self.current_screen = self._get_observation()
+        
+        # Update state and get reward
+        reward = self._calculate_reward()
+        
+        # Check if episode is done
+        self.steps_taken += 1
+        terminated = False  # Implement proper termination conditions
+        truncated = self.steps_taken >= self.max_steps
+        
+        # Additional info
+        info = {
+            'steps': self.steps_taken,
+            'state': self.state_manager.get_state_data()
+        }
+        
+        return self.current_screen, reward, terminated, truncated, info
+    
+    def render(self):
+        """Return current screen."""
+        return self.current_screen
+        
+    def close(self):
+        """Clean up environment."""
+        if self.emulator:
+            self.emulator.close()
+    
+    def _get_observation(self) -> np.ndarray:
+        """Get current game screen."""
+        screen_data = self.emulator.get_screen()
+        screen = self.image_processor.decode_screenshot(screen_data)
+        return self.image_processor.normalize_size(screen)
+    
+    def _calculate_reward(self) -> float:
+        """Calculate reward based on current state."""
+        # Implement reward calculation based on game events
+        return 0.0  # Placeholder
+# <FILE_DELIMITER> #
+src\env\__init__.py
+
+
+# <FILE_DELIMITER> #
+src\scripts\test_basic_control.py
+
+#!/usr/bin/env python3
+"""Basic control test for BizHawk emulator."""
+
+import os
+import time
+from pathlib import Path
+from dotenv import load_dotenv
+import logging
+
+from src.core.emulator import BizHawkEmulator
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+def find_project_root() -> Path:
+    """Find the project root directory."""
+    current = Path(__file__).resolve().parent
+    while current != current.parent:
+        if (current / '.env').exists():
+            return current
+        current = current.parent
+    raise FileNotFoundError("Could not find project root (no .env file found)")
+
+def test_basic_control():
+    """Test basic emulator controls and save state loading."""
+    try:
+        # Load environment configuration
+        project_root = find_project_root()
+        load_dotenv(project_root / '.env')
+        
+        # Get paths
+        bizhawk_path = os.getenv("BIZHAWK_PATH")
+        rom_path = os.getenv("ROM_PATH")
+        lua_path = os.getenv("LUA_PATH")
+        save_state = project_root / "logs" / "saveStates" / "TEST_SAVE.mGBA.QuickSave0.State"
+
+        logger.info("Starting emulator test...")
+        logger.info(f"ROM Path: {rom_path}")
+        logger.info(f"Save State: {save_state}")
+
+        # Initialize emulator
+        emulator = BizHawkEmulator(bizhawk_path, rom_path, lua_path, save_state)
+
+        # Wait for everything to load
+        logger.info("Waiting for game to load...")
+        time.sleep(3)
+
+        # Test movement sequence
+        movements = [
+            ("up", 0.5),
+            ("right", 0.5),
+            ("down", 0.5),
+            ("left", 0.5)
+        ]
+
+        logger.info("Testing movement controls...")
+        for direction, duration in movements:
+            logger.info(f"Moving {direction} for {duration} seconds")
+            emulator.press_button(direction, duration)
+            time.sleep(0.3)  # Brief pause between movements
+
+        logger.info("Movement test completed.")
+        
+        # Keep window open briefly to observe results
+        time.sleep(2)
+
+    except Exception as e:
+        logger.error(f"Test failed: {e}")
+        raise
+    finally:
+        if 'emulator' in locals():
+            emulator.close()
+            logger.info("Emulator closed.")
+
+if __name__ == "__main__":
+    test_basic_control()
+# <FILE_DELIMITER> #
+src\scripts\__init__.py
+
+
+# <FILE_DELIMITER> #
+src\utils\path_handling.py
+
+from pathlib import Path
+import os
+
+def get_project_root() -> Path:
+    """Get the absolute path to the project root directory"""
+    return Path(__file__).parent.parent.parent
+
+def resolve_path(relative_path: str) -> Path:
+    """Convert a path relative to project root into absolute path"""
+    root = get_project_root()
+    # Remove './' from the start if present
+    clean_path = relative_path.lstrip('./')
+    return root / clean_path
+
+def ensure_path_exists(path: Path, create: bool = True) -> Path:
+    """Ensure a path exists, optionally creating it"""
+    if create and not path.exists():
+        if path.suffix:  # If it's a file, create parent directories
+            path.parent.mkdir(parents=True, exist_ok=True)
+        else:  # If it's a directory, create it
+            path.mkdir(parents=True, exist_ok=True)
+    return path
+# <FILE_DELIMITER> #
+src\utils\__init__.py
+
+

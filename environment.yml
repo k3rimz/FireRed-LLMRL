@@ -1,0 +1,27 @@
+name: pokemon-rl
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
+  - pip
+  - pip:
+    - opencv-python
+    - numpy
+    - pillow
+    - transformers
+    - ultralytics  # YOLOv8
+    - open_clip_torch
+    - mss  # Screen capture
+    - pywin32  # Windows window capture
+    - pyautogui  # Emulator control
+    - jupyter
+    - ipykernel
+    - matplotlib
+    - tensorboard
